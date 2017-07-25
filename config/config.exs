@@ -28,3 +28,7 @@ use Mix.Config
 # here (which is why it is important to import them last).
 #
 #     import_config "#{Mix.env}.exs"
+config :bamboo_unisender, Mailer,
+  adapter: Bamboo.UnisenderAdapter,
+  api_key: System.get_env("API_KEY")
+

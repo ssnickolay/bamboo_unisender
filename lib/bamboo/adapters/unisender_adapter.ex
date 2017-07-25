@@ -1,3 +1,4 @@
+require IEx
 defmodule Bamboo.UnisenderAdapter do
   @service_name "Unisender"
   @behaviour Bamboo.Adapter
@@ -9,14 +10,15 @@ defmodule Bamboo.UnisenderAdapter do
   def deliver(email, config) do
     api_key = get_key(config)
     params = email |> convert_to_unisender_params(api_key) |> Poison.encode!
-    uri = [base_uri(), "/", @send_message_path]
+    uri = [base_uri(), "/", api_path(api_key)]
 
+    r = :hackney.post(uri, headers(), params, [:with_body])
     case :hackney.post(uri, headers(), params, [:with_body]) do
       {:ok, status, _headers, response} when status > 299 ->
-        filtered_params = params |> Poison.decode! |> Map.put("key", "[FILTERED]")
-        raise_api_error(@service_name, response, filtered_params)
+        error_response(status, response, params)
       {:ok, status, headers, response} ->
         %{status_code: status, headers: headers, body: response}
+        |> handle_response(Poison.decode!(response), params)
       {:error, reason} ->
         raise_api_error(inspect(reason))
     end
@@ -25,8 +27,20 @@ defmodule Bamboo.UnisenderAdapter do
   def handle_config(config) do
     config
   end
+  
+  defp handle_response(%{status_code: status, body: response}, %{"error" => _}, params) do
+    error_response(status, response, params)
+  end
+  defp handle_response(ok, _, _), do: ok
 
-  def convert_to_unisender_params(params, api_key) do
+  defp error_response(status, response, params) do
+    filtered_params = params |> Poison.decode! |> Map.put("key", "[FILTERED]")
+    raise_api_error(@service_name, response, filtered_params)
+  end
+
+  defp api_path(api_key), do: Enum.join([@send_message_path, "?format=json&api_key=", api_key]) 
+
+  defp convert_to_unisender_params(params, api_key) do
     %{a: 1}
   end
 
