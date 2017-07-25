@@ -28,6 +28,6 @@ defmodule BambooUnisender.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps do
-    []
+    [{:bamboo, git: "https://github.com/thoughtbot/bamboo.git", branch: "master"}]
   end
 end
