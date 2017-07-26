@@ -8,13 +8,10 @@ defmodule Bamboo.UnisenderAdapter do
 
   def deliver(email, config) do
     api_key = get_key(config)
-    params = email |> convert_to_unisender_params #|> Poison.encode!
-    uri = [base_uri(), "/", api_path(api_key)]
+    params = query_params(api_key, email)
+    uri = [base_uri(), "/", api_path(params)]
 
-    url_path = params |> Enum.map(fn({k, v}) -> Enum.join([k, v], "=") end) |> Enum.join("&")
-    new_uri = Enum.join([uri, url_path], "&")
-
-    case :hackney.post(new_uri, headers(), "", [:with_body]) do
+    case :hackney.post(uri, headers(), "", [:with_body]) do
       {:ok, status, _headers, response} when status > 299 ->
         error_response(status, response, params)
       {:ok, status, headers, response} ->
@@ -26,8 +23,15 @@ defmodule Bamboo.UnisenderAdapter do
   end
 
   def handle_config(config) do
-    config
+    if config[:api_key] in [nil, ""] do
+      raise_api_key_error(config)
+    else
+      config
+    end
   end
+
+  @doc false
+  def supports_attachments?, do: false
 
   defp handle_response(%{status_code: status, body: response}, %{"error" => _}, params) do
     error_response(status, response, params)
@@ -35,11 +39,24 @@ defmodule Bamboo.UnisenderAdapter do
   defp handle_response(ok, _, _), do: ok
 
   defp error_response(status, response, params) do
-    filtered_params = params #|> Poison.decode! |> Map.put("key", "[FILTERED]")
+    filtered_params = params |> Map.put("key", "[FILTERED]")
     raise_api_error(@service_name, response, filtered_params)
   end
 
-  defp api_path(api_key), do: Enum.join([@send_message_path, "?format=json&api_key=", api_key])
+  defp api_path(params) do
+    to_string =
+      params
+      |> Enum.map(fn({k, v}) -> Enum.join([k, v], "=") end)
+      |> Enum.join("&")
+    Enum.join([@send_message_path, "?", to_string])
+  end
+
+  defp query_params(api_key, email) do
+    #attachments_uri = Enum.join([new_uri, build_attachments(email.attachments)], "&")
+    email
+    |> convert_to_unisender_params
+    |> Map.merge(%{api_key: api_key, format: :json})
+  end
 
   defp convert_to_unisender_params(email) do
     [{_, email_to}] = email.to
@@ -48,9 +65,14 @@ defmodule Bamboo.UnisenderAdapter do
       sender_name: email.from |> elem(0),
       sender_email: email.from |> elem(1),
       subject: email.subject,
-      list_id: 10513637,
+      list_id: email.assigns[:list_id],
       body: email.html_body
     }
+  end
+
+  def build_attachments(arr) do
+    [a] = arr
+    "attachments[#{a.filename}]=#{String.from_char_list(a.data)}"
   end
 
   defp get_key(config) do

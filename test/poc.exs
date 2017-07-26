@@ -10,7 +10,9 @@ defmodule PoC do
       to: "ssnikolay@gmail.com",
       from: {"Nikolay", "mailer@voltmobi.com"},
       subject: "Unisender",
-      html_body: "<p>Unisender!</p>"
+      html_body: "<p>Unisender!</p>",
+      assigns: %{list_id: 10513637}
+      # attachments: [Bamboo.Attachment.new("/Users/ssnickolay/Documents/piki.jpg")]
     )
     email |> Mailer.deliver_now
   end
